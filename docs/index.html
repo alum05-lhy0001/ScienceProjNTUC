@@ -1,108 +1,15 @@
 <!doctype html>
 <html>
 <head>
-<meta charset="utf-8">
-<title>Excel Viewer</title>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<style>
-  body{font-family:Arial,Helvetica,sans-serif;margin:20px}
-  .table-wrap{overflow:auto;margin-top:12px}
-  table{border-collapse:collapse;width:100%}
-  th,td{border:1px solid #ccc;padding:6px;text-align:left}
-  #status{margin-top:8px;color:#555}
-  pre{background:#f8f8f8;padding:10px;border-radius:4px}
-</style>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Download sciencefair.xlsx</title>
+  <style>body{font-family:Arial,Helvetica,sans-serif;margin:20px}</style>
 </head>
 <body>
-<h1>Excel Viewer</h1>
-<p>This page attempts to load <code>docs/data.xlsx</code> by default. To change the file, replace <code>docs/data.xlsx</code> in the repository or edit <code>EXCEL_URL</code> in the script below.</p>
-<input type="file" id="filepicker" accept=".xlsx,.xls,.csv" />
-<div id="status"></div>
-<div id="out" class="table-wrap"></div>
-
-<script>
-// Recommended: put your .xlsx file at docs/data.xlsx and keep EXCEL_URL = './data.xlsx'
-const EXCEL_URL = './data.xlsx';
-const VENDOR_LOCAL = './vendor/xlsx.full.min.js';
-const CDN = 'https://cdn.jsdelivr.net/npm/xlsx@0.19.4/dist/xlsx.full.min.js';
-
-function loadScript(src){
-  return new Promise((res,rej)=>{
-    const s=document.createElement('script');
-    s.src=src;
-    s.onload=()=>res(src);
-    s.onerror=()=>rej(new Error('Failed to load '+src));
-    document.head.appendChild(s);
-  });
-}
-
-async function ensureSheetJS(){
-  // Prefer local vendor copy first (avoids Tracking Prevention issues)
-  try{
-    await loadScript(VENDOR_LOCAL);
-    console.log('Loaded local SheetJS from', VENDOR_LOCAL);
-    return;
-  }catch(e){
-    console.warn('Local SheetJS not found, falling back to CDN');
-  }
-  try{
-    await loadScript(CDN);
-    console.log('Loaded SheetJS from CDN');
-  }catch(e){
-    document.getElementById('status').textContent = 'Failed to load SheetJS. If your browser blocks CDN scripts, download https://cdn.jsdelivr.net/npm/xlsx@0.19.4/dist/xlsx.full.min.js and place it at docs/vendor/xlsx.full.min.js';
-    throw e;
-  }
-}
-
-function renderSheetToHTML(wb){
-  const first = wb.SheetNames[0];
-  const ws = wb.Sheets[first];
-  const html = XLSX.utils.sheet_to_html(ws);
-  document.getElementById('out').innerHTML = html;
-}
-
-async function fetchAndRender(url){
-  document.getElementById('status').textContent = 'Loading workbook...';
-  try{
-    const res = await fetch(url);
-    if(!res.ok) throw new Error('HTTP '+res.status);
-    const ab = await res.arrayBuffer();
-    const wb = XLSX.read(ab, {type:'array'});
-    renderSheetToHTML(wb);
-    document.getElementById('status').textContent = 'Rendered: ' + (wb.SheetNames[0] || '');
-  }catch(err){
-    document.getElementById('status').textContent = 'Failed to load "'+url+'": '+err.message + '. Check EXCEL_URL and CORS.';
-    const p = document.createElement('pre');
-    p.textContent = 'Troubleshooting:\n- Ensure file exists at docs/data.xlsx or set EXCEL_URL to a raw.githubusercontent.com URL.\n- If using GitHub raw URLs, consider using https://raw.githack.com/ to avoid CORS.\n- If you saw "Tracking Prevention blocked access to storage" in console, host the xlsx.full.min.js locally at docs/vendor/xlsx.full.min.js.';
-    document.getElementById('out').appendChild(p);
-  }
-}
-
-document.getElementById('filepicker').addEventListener('change', (e)=>{
-  const f = e.target.files[0];
-  if(!f) return;
-  const reader = new FileReader();
-  reader.onload = function(ev){
-    try{
-      const data = new Uint8Array(ev.target.result);
-      const wb = XLSX.read(data, {type:'array'});
-      renderSheetToHTML(wb);
-      document.getElementById('status').textContent = 'Rendered local file: '+f.name;
-    }catch(err){
-      document.getElementById('status').textContent = 'Error parsing file: '+err.message;
-    }
-  };
-  reader.readAsArrayBuffer(f);
-});
-
-(async function(){
-  try{
-    await ensureSheetJS();
-    await fetchAndRender(EXCEL_URL);
-  }catch(e){
-    console.error(e);
-  }
-})();
-</script>
+  <h1>Download sciencefair.xlsx</h1>
+  <p>This page provides a link to download the spreadsheet.</p>
+  <p><a href="./sciencefair.xlsx" download>Download sciencefair.xlsx</a></p>
+  <p>If the file is named differently or located elsewhere, update the link or place the file at <code>docs/sciencefair.xlsx</code>.</p>
 </body>
 </html>
