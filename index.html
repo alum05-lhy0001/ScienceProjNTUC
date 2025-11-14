@@ -41,20 +41,17 @@
     Notes:
     <ul>
       <li>If your browser blocks third-party storage (Tracking Prevention) the CDN-hosted SheetJS may fail to load — place a copy of xlsx.full.min.js at docs/vendor/xlsx.full.min.js to avoid this.</li>
-      <li>Put your .xlsx file in docs/ and set EXCEL_URL to "./your-file.xlsx" (recommended), or set EXCEL_URL to a raw.githubusercontent.com URL.</li>
+      <li>Put your .xlsx file in docs/ and set EXCEL_URL to "./data.xlsx" (recommended), or set EXCEL_URL to a raw.githubusercontent.com URL if you prefer.</li>
     </ul>
   </div>
 
   <script>
     // === CONFIGURE THESE ===
     // Recommended: place your .xlsx inside the docs/ folder next to this file and use a relative path:
-    //   const EXCEL_URL = "./your-file.xlsx";
-    //
-    // Alternative: a raw GitHub URL to the file, e.g.
-    //   "https://raw.githubusercontent.com/alum05-lhy0001/ScienceProjNTUC/main/path/to/your-file.xlsx"
+    //   const EXCEL_URL = "./data.xlsx";
     //
     // If you plan to host the SheetJS library locally, put it at ./vendor/xlsx.full.min.js
-    const EXCEL_URL = "./your-file.xlsx"; // <- change to match your .xlsx in docs/
+    const EXCEL_URL = "./data.xlsx"; // <- change only if your .xlsx is named differently
     const SHEETJS_CDN = "https://cdn.jsdelivr.net/npm/xlsx@0.19.4/dist/xlsx.full.min.js";
     const SHEETJS_LOCAL = "./vendor/xlsx.full.min.js"; // fallback when CDN blocked or unavailable
     // =======================
@@ -222,8 +219,7 @@
       t.innerHTML = '<strong>Troubleshooting</strong><ul>' +
         '<li>If you saw "Tracking Prevention blocked access to storage" in the console, your browser blocked the CDN script from creating storage and that can break loading. To fix: download the SheetJS bundle and host it locally in this repo at <code>docs/vendor/xlsx.full.min.js</code>.</li>' +
         '<li>To get the SheetJS file: visit<br><code>' + SHEETJS_CDN + '</code><br>and save the file as <code>docs/vendor/xlsx.full.min.js</code>.</li>' +
-        '<li>If you get a 404 when fetching the workbook, confirm the EXCEL_URL points to an existing file. Recommended: add your .xlsx to the docs/ folder and set <code>EXCEL_URL = "./your-file.xlsx"</code>.</li>' +
-        '<li>Example: if your file name is <code>data.xlsx</code>, place it at <code>docs/data.xlsx</code> and set <code>EXCEL_URL = "./data.xlsx"</code>.</li>' +
+        '<li>If you get a 404 when fetching the workbook, confirm the EXCEL_URL points to an existing file. Recommended: add your .xlsx to the docs/ folder and set <code>EXCEL_URL = \"./data.xlsx\"</code>.</li>' +
         '</ul>';
       n.parentNode.insertBefore(t, n.nextSibling);
       console.warn("Troubleshooting:", error);
