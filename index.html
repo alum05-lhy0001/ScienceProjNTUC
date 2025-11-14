@@ -1,12 +1,153 @@
 <!doctype html>
-<html>
-  <head>
-    <meta charset="utf-8"/>
-    <title>Science Project Files</title>
-  </head>
-  <body>
-    <h1>Science Project Files</h1>
-    <p>Download the spreadsheet:</p>
-    <p><a href="ScienceFair.xlsx" download>Download ScienceFair.xlsx</a></p>
-  </body>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Excel Viewer</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <style>
+    body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial; margin: 20px; }
+    #controls { margin-bottom: 12px; display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+    select, button, a.button-link { font-size: 14px; padding: 6px 8px; text-decoration:none; color:inherit; border:1px solid #ccc; background:#f8f8f8; border-radius:4px; }
+    a.button-link:hover, button:hover { background:#eee; cursor:pointer; }
+    .sheet { margin-bottom: 24px; border: 1px solid #ddd; padding: 8px; overflow:auto; }
+    table { border-collapse: collapse; width: 100%; }
+    table th, table td { border: 1px solid #ccc; padding: 4px 6px; white-space: nowrap; }
+    .sheet-title { font-weight: 600; margin-bottom: 8px; }
+    .loading { color: #666; margin-left:8px; }
+  </style>
+</head>
+<body>
+  <h2>Excel Viewer</h2>
+
+  <div id="controls">
+    <label for="sheetSelect">Sheet:</label>
+    <select id="sheetSelect"></select>
+
+    <button id="showAllBtn" title="Render all sheets on the page">Show All Sheets</button>
+
+    <!-- Persistent download link (direct to file) -->
+    <a id="downloadLink" class="button-link" href="#" target="_blank" rel="noopener" download>Download original .xlsx</a>
+
+    <!-- Programmatic download (uses loaded ArrayBuffer so it can force a download even if raw server doesn't set headers) -->
+    <button id="downloadBtn" title="Programmatic download of the fetched file">Download (force)</button>
+
+    <span id="status" class="loading"></span>
+  </div>
+
+  <div id="sheetsContainer"></div>
+
+  <!-- SheetJS (xlsx) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.4/dist/xlsx.full.min.js"></script>
+  <script>
+    // Replace with either:
+    // - raw.githubusercontent.com URL for your file, e.g.
+    //   "https://raw.githubusercontent.com/alum05-lhy0001/ScienceProjNTUC/main/path/to/your-file.xlsx"
+    // - OR the GitHub Pages-served URL / relative path after you publish, e.g.
+    //   "./your-file.xlsx" (if the .xlsx is placed in docs/ alongside index.html)
+    const EXCEL_URL = "https://raw.githubusercontent.com/alum05-lhy0001/ScienceProjNTUC/main/path/to/your-file.xlsx";
+
+    const statusEl = document.getElementById('status');
+    const sheetSelect = document.getElementById('sheetSelect');
+    const sheetsContainer = document.getElementById('sheetsContainer');
+    const showAllBtn = document.getElementById('showAllBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const downloadLink = document.getElementById('downloadLink');
+
+    // Initialize the persistent link href (works as direct open/download)
+    function initDownloadLink(url) {
+      downloadLink.href = url;
+      try {
+        downloadLink.download = (url.split('/').pop() || 'sheet.xlsx');
+      } catch (e) {
+        // some browsers ignore download on cross-origin links; the href still works
+      }
+    }
+
+    async function fetchWorkbook(url) {
+      statusEl.textContent = 'Loading workbook...';
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('Failed to fetch: ' + resp.status);
+      const ab = await resp.arrayBuffer();
+      const wb = XLSX.read(ab, { type: 'array' });
+      statusEl.textContent = '';
+      return { wb, rawBuffer: ab };
+    }
+
+    function renderSheetToContainer(wb, sheetName) {
+      const ws = wb.Sheets[sheetName];
+      const html = XLSX.utils.sheet_to_html(ws, { editable: false });
+      const wrapper = document.createElement('div');
+      wrapper.className = 'sheet';
+      wrapper.innerHTML = '<div class="sheet-title">' + escapeHtml(sheetName) + '</div>' + html;
+      return wrapper;
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, function (m) { return ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[m]; });
+    }
+
+    async function init() {
+      // set persistent link immediately so users can click even before viewer finishes loading
+      initDownloadLink(EXCEL_URL);
+
+      try {
+        const { wb, rawBuffer } = await fetchWorkbook(EXCEL_URL);
+
+        // populate selector
+        sheetSelect.innerHTML = '';
+        wb.SheetNames.forEach((name) => {
+          const opt = document.createElement('option');
+          opt.value = name;
+          opt.textContent = name;
+          sheetSelect.appendChild(opt);
+        });
+
+        // interactions
+        sheetSelect.onchange = () => {
+          showSheet(sheetSelect.value, wb);
+        };
+
+        showAllBtn.onclick = () => {
+          showAllSheets(wb);
+        };
+
+        downloadBtn.onclick = () => {
+          // Use the already-fetched ArrayBuffer to force a download with a proper filename
+          const blob = new Blob([rawBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const a = document.createElement('a');
+          a.href = URL.createObjectURL(blob);
+          a.download = (EXCEL_URL.split('/').pop() || 'sheet.xlsx');
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        };
+
+        // initial display
+        if (wb.SheetNames.length > 0) {
+          showSheet(wb.SheetNames[0], wb);
+        } else {
+          statusEl.textContent = 'No sheets found in workbook.';
+        }
+      } catch (err) {
+        statusEl.textContent = 'Error: ' + err.message;
+      }
+    }
+
+    function showSheet(sheetName, wb) {
+      sheetsContainer.innerHTML = '';
+      const sheetNode = renderSheetToContainer(wb, sheetName);
+      sheetsContainer.appendChild(sheetNode);
+    }
+
+    function showAllSheets(wb) {
+      sheetsContainer.innerHTML = '';
+      wb.SheetNames.forEach(name => {
+        sheetsContainer.appendChild(renderSheetToContainer(wb, name));
+      });
+    }
+
+    // Kick off
+    init();
+  </script>
+</body>
 </html>
