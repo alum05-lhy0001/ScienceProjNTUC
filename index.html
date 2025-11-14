@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <title>Excel Viewer</title>
+  <title>Excel Viewer (with local fallback)</title>
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <style>
     body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial; margin: 20px; }
@@ -14,6 +14,9 @@
     table th, table td { border: 1px solid #ccc; padding: 4px 6px; white-space: nowrap; }
     .sheet-title { font-weight: 600; margin-bottom: 8px; }
     .loading { color: #666; margin-left:8px; }
+    .error { color: #a00; }
+    .hint { color: #444; font-size:13px; margin-top:8px; }
+    .small { font-size: 12px; color:#666; }
   </style>
 </head>
 <body>
@@ -25,10 +28,8 @@
 
     <button id="showAllBtn" title="Render all sheets on the page">Show All Sheets</button>
 
-    <!-- Persistent download link (direct to file) -->
     <a id="downloadLink" class="button-link" href="#" target="_blank" rel="noopener" download>Download original .xlsx</a>
 
-    <!-- Programmatic download (uses loaded ArrayBuffer so it can force a download even if raw server doesn't set headers) -->
     <button id="downloadBtn" title="Programmatic download of the fetched file">Download (force)</button>
 
     <span id="status" class="loading"></span>
@@ -36,15 +37,27 @@
 
   <div id="sheetsContainer"></div>
 
-  <!-- SheetJS (xlsx) -->
-  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.19.4/dist/xlsx.full.min.js"></script>
+  <div id="notes" class="hint small">
+    Notes:
+    <ul>
+      <li>If your browser blocks third-party storage (Tracking Prevention) the CDN-hosted SheetJS may fail to load — place a copy of xlsx.full.min.js at docs/vendor/xlsx.full.min.js to avoid this.</li>
+      <li>Put your .xlsx file in docs/ and set EXCEL_URL to "./your-file.xlsx" (recommended), or set EXCEL_URL to a raw.githubusercontent.com URL.</li>
+    </ul>
+  </div>
+
   <script>
-    // Replace with either:
-    // - raw.githubusercontent.com URL for your file, e.g.
+    // === CONFIGURE THESE ===
+    // Recommended: place your .xlsx inside the docs/ folder next to this file and use a relative path:
+    //   const EXCEL_URL = "./your-file.xlsx";
+    //
+    // Alternative: a raw GitHub URL to the file, e.g.
     //   "https://raw.githubusercontent.com/alum05-lhy0001/ScienceProjNTUC/main/path/to/your-file.xlsx"
-    // - OR the GitHub Pages-served URL / relative path after you publish, e.g.
-    //   "./your-file.xlsx" (if the .xlsx is placed in docs/ alongside index.html)
-    const EXCEL_URL = "https://raw.githubusercontent.com/alum05-lhy0001/ScienceProjNTUC/main/path/to/your-file.xlsx";
+    //
+    // If you plan to host the SheetJS library locally, put it at ./vendor/xlsx.full.min.js
+    const EXCEL_URL = "./your-file.xlsx"; // <- change to match your .xlsx in docs/
+    const SHEETJS_CDN = "https://cdn.jsdelivr.net/npm/xlsx@0.19.4/dist/xlsx.full.min.js";
+    const SHEETJS_LOCAL = "./vendor/xlsx.full.min.js"; // fallback when CDN blocked or unavailable
+    // =======================
 
     const statusEl = document.getElementById('status');
     const sheetSelect = document.getElementById('sheetSelect');
@@ -53,24 +66,66 @@
     const downloadBtn = document.getElementById('downloadBtn');
     const downloadLink = document.getElementById('downloadLink');
 
-    // Initialize the persistent link href (works as direct open/download)
+    initDownloadLink(EXCEL_URL);
+
+    // Try to load SheetJS from CDN, fall back to local vendor if CDN script fails (e.g. Tracking Prevention)
+    function loadSheetJS() {
+      return new Promise((resolve, reject) => {
+        if (window.XLSX) return resolve(window.XLSX);
+
+        function loadScript(src, onload, onerror) {
+          const s = document.createElement('script');
+          s.src = src;
+          s.async = true;
+          s.onload = onload;
+          s.onerror = onerror;
+          document.head.appendChild(s);
+        }
+
+        // Attempt CDN first
+        loadScript(SHEETJS_CDN, () => {
+          if (window.XLSX) return resolve(window.XLSX);
+          // unexpected: script loaded but no XLSX object
+          console.warn("SheetJS loaded but window.XLSX is not present.");
+          // try local fallback
+          loadScript(SHEETJS_LOCAL, () => {
+            if (window.XLSX) return resolve(window.XLSX);
+            reject(new Error("SheetJS loaded but window.XLSX missing"));
+          }, () => {
+            reject(new Error("Failed to load SheetJS from both CDN and local fallback."));
+          });
+        }, (e) => {
+          console.warn("Failed loading SheetJS from CDN, trying local fallback.", e);
+          // Try local file
+          loadScript(SHEETJS_LOCAL, () => {
+            if (window.XLSX) return resolve(window.XLSX);
+            reject(new Error("Local SheetJS loaded but window.XLSX missing"));
+          }, () => {
+            reject(new Error("Failed to load SheetJS from CDN and local fallback."));
+          });
+        });
+      });
+    }
+
     function initDownloadLink(url) {
       downloadLink.href = url;
-      try {
-        downloadLink.download = (url.split('/').pop() || 'sheet.xlsx');
-      } catch (e) {
-        // some browsers ignore download on cross-origin links; the href still works
-      }
+      try { downloadLink.download = (url.split('/').pop() || 'sheet.xlsx'); } catch (e) {}
     }
 
     async function fetchWorkbook(url) {
       statusEl.textContent = 'Loading workbook...';
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error('Failed to fetch: ' + resp.status);
-      const ab = await resp.arrayBuffer();
-      const wb = XLSX.read(ab, { type: 'array' });
-      statusEl.textContent = '';
-      return { wb, rawBuffer: ab };
+      try {
+        const resp = await fetch(url);
+        if (!resp.ok) {
+          throw new Error('Failed to fetch file: ' + resp.status + ' ' + resp.statusText);
+        }
+        const ab = await resp.arrayBuffer();
+        return ab;
+      } catch (err) {
+        throw err;
+      } finally {
+        // leave status to caller
+      }
     }
 
     function renderSheetToContainer(wb, sheetName) {
@@ -87,11 +142,21 @@
     }
 
     async function init() {
-      // set persistent link immediately so users can click even before viewer finishes loading
-      initDownloadLink(EXCEL_URL);
-
+      statusEl.textContent = 'Loading viewer...';
       try {
-        const { wb, rawBuffer } = await fetchWorkbook(EXCEL_URL);
+        await loadSheetJS();
+      } catch (err) {
+        statusEl.className = 'error';
+        statusEl.textContent = 'Failed to load SheetJS library. See notes below.';
+        console.error(err);
+        showTroubleshooting(err);
+        return;
+      }
+
+      // now SheetJS is available
+      try {
+        const ab = await fetchWorkbook(EXCEL_URL);
+        const wb = XLSX.read(ab, { type: 'array' });
 
         // populate selector
         sheetSelect.innerHTML = '';
@@ -102,7 +167,6 @@
           sheetSelect.appendChild(opt);
         });
 
-        // interactions
         sheetSelect.onchange = () => {
           showSheet(sheetSelect.value, wb);
         };
@@ -112,8 +176,7 @@
         };
 
         downloadBtn.onclick = () => {
-          // Use the already-fetched ArrayBuffer to force a download with a proper filename
-          const blob = new Blob([rawBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+          const blob = new Blob([ab], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
           const a = document.createElement('a');
           a.href = URL.createObjectURL(blob);
           a.download = (EXCEL_URL.split('/').pop() || 'sheet.xlsx');
@@ -122,14 +185,20 @@
           a.remove();
         };
 
-        // initial display
+        initDownloadLink(EXCEL_URL);
+
         if (wb.SheetNames.length > 0) {
           showSheet(wb.SheetNames[0], wb);
+          statusEl.textContent = '';
+          statusEl.className = 'loading';
         } else {
           statusEl.textContent = 'No sheets found in workbook.';
         }
       } catch (err) {
-        statusEl.textContent = 'Error: ' + err.message;
+        statusEl.className = 'error';
+        statusEl.textContent = 'Error loading workbook: ' + err.message;
+        console.error(err);
+        showTroubleshooting(err);
       }
     }
 
@@ -146,7 +215,21 @@
       });
     }
 
-    // Kick off
+    function showTroubleshooting(error) {
+      const n = document.getElementById('notes');
+      const t = document.createElement('div');
+      t.className = 'hint';
+      t.innerHTML = '<strong>Troubleshooting</strong><ul>' +
+        '<li>If you saw "Tracking Prevention blocked access to storage" in the console, your browser blocked the CDN script from creating storage and that can break loading. To fix: download the SheetJS bundle and host it locally in this repo at <code>docs/vendor/xlsx.full.min.js</code>.</li>' +
+        '<li>To get the SheetJS file: visit<br><code>' + SHEETJS_CDN + '</code><br>and save the file as <code>docs/vendor/xlsx.full.min.js</code>.</li>' +
+        '<li>If you get a 404 when fetching the workbook, confirm the EXCEL_URL points to an existing file. Recommended: add your .xlsx to the docs/ folder and set <code>EXCEL_URL = "./your-file.xlsx"</code>.</li>' +
+        '<li>Example: if your file name is <code>data.xlsx</code>, place it at <code>docs/data.xlsx</code> and set <code>EXCEL_URL = "./data.xlsx"</code>.</li>' +
+        '</ul>';
+      n.parentNode.insertBefore(t, n.nextSibling);
+      console.warn("Troubleshooting:", error);
+    }
+
+    // start
     init();
   </script>
 </body>
